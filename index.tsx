@@ -14,7 +14,8 @@ import {
   Zap,
   Info,
   Box,
-  Layout
+  Layout,
+  User
 } from 'lucide-react';
 
 // --- Types & Data ---
@@ -187,7 +188,7 @@ const TreeVisualizer = ({ data, activeNodeId, visitedIds = [] }: { data: NodeDat
 };
 
 const SectionHeader = ({ title, icon: Icon, description }: any) => (
-  <div className="mb-8">
+  <div className="mb-6">
     <div className="flex items-center gap-3 mb-2">
       <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400">
         <Icon size={24} />
@@ -301,6 +302,28 @@ const App = () => {
                 icon={BookOpen}
                 description="A hierarchical, non-linear data structure consisting of nodes connected by edges."
               />
+
+              {/* Presenter Info Badge */}
+              <div className="mb-8 flex flex-wrap gap-4">
+                <div className="glass-panel px-4 py-2 rounded-xl border-emerald-500/20 flex items-center gap-3 shadow-emerald-500/5">
+                  <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400">
+                    <User size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-tighter font-bold text-slate-500">Presenter</p>
+                    <p className="text-sm font-bold text-white">Paras Jagdish Patil</p>
+                  </div>
+                </div>
+                <div className="glass-panel px-4 py-2 rounded-xl border-emerald-500/20 flex items-center gap-3 shadow-emerald-500/5">
+                  <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400">
+                    <Terminal size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-tighter font-bold text-slate-500">Roll No</p>
+                    <p className="text-sm font-bold text-white">2547028</p>
+                  </div>
+                </div>
+              </div>
               
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12 items-stretch">
                 <div className="glass-panel p-8 rounded-2xl flex flex-col">
