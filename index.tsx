@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
   TreePine, 
@@ -16,18 +16,23 @@ import {
   Box,
   Layout,
   User,
-  ShieldCheck
+  ShieldCheck,
+  PlusCircle,
+  RefreshCw,
+  Trash2,
+  Play
 } from 'lucide-react';
 
 // --- Types & Data ---
 
 type NodeData = {
   id: string;
-  value: string | number;
+  value: number;
   left?: NodeData;
   right?: NodeData;
   x?: number;
   y?: number;
+  isNew?: boolean; // For animation highlight
 };
 
 const TREE_PRESETS: Record<string, NodeData> = {
@@ -35,15 +40,6 @@ const TREE_PRESETS: Record<string, NodeData> = {
     id: '1', value: 10,
     left: { id: '2', value: 5, left: { id: '4', value: 2 }, right: { id: '5', value: 7 } },
     right: { id: '3', value: 15, left: { id: '6', value: 12 }, right: { id: '7', value: 20 } }
-  },
-  skewed: {
-    id: '1', value: 1,
-    right: { id: '2', value: 2, right: { id: '3', value: 3, right: { id: '4', value: 4 } } }
-  },
-  bst: {
-    id: '1', value: 50,
-    left: { id: '2', value: 30, left: { id: '4', value: 20 }, right: { id: '5', value: 40 } },
-    right: { id: '3', value: 70, left: { id: '6', value: 60 }, right: { id: '7', value: 80 } }
   }
 };
 
@@ -82,6 +78,28 @@ def insert(root, key):
     return root`
 };
 
+// --- Helper Functions ---
+
+const clearNewFlags = (node: NodeData): NodeData => ({
+  ...node,
+  isNew: false,
+  left: node.left ? clearNewFlags(node.left) : undefined,
+  right: node.right ? clearNewFlags(node.right) : undefined,
+});
+
+const insertBSTImmutable = (root: NodeData | undefined, val: number, idCounter: { current: number }): NodeData => {
+  if (!root) {
+    return { id: (idCounter.current++).toString(), value: val, isNew: true };
+  }
+  const newNode = { ...root, isNew: false };
+  if (val < root.value) {
+    newNode.left = insertBSTImmutable(root.left, val, idCounter);
+  } else if (val > root.value) {
+    newNode.right = insertBSTImmutable(root.right, val, idCounter);
+  }
+  return newNode;
+};
+
 // --- Components ---
 
 const SidebarItem = ({ active, icon: Icon, label, onClick }: any) => (
@@ -98,14 +116,20 @@ const SidebarItem = ({ active, icon: Icon, label, onClick }: any) => (
   </button>
 );
 
-const TreeVisualizer = ({ data, activeNodeId, visitedIds = [] }: { data: NodeData, activeNodeId?: string, visitedIds?: string[] }) => {
+const TreeVisualizer = ({ data, activeNodeId, visitedIds = [] }: { data: NodeData | null, activeNodeId?: string, visitedIds?: string[] }) => {
+  if (!data) return (
+    <div className="w-full h-full min-h-[300px] flex flex-col items-center justify-center bg-slate-900/40 rounded-xl border border-dashed border-slate-700">
+      <TreePine className="text-slate-700 mb-4" size={48} />
+      <p className="text-slate-500 text-sm font-medium">Ready to grow your tree...</p>
+    </div>
+  );
+
   const canvasWidth = 600;
   const canvasHeight = 400;
 
-  // Calculate coordinates
   const calculatePositions = (node: NodeData, depth: number, xStart: number, xEnd: number): NodeData => {
     const x = (xStart + xEnd) / 2;
-    const y = depth * 80 + 60;
+    const y = depth * 70 + 60;
     return {
       ...node,
       x, y,
@@ -124,6 +148,7 @@ const TreeVisualizer = ({ data, activeNodeId, visitedIds = [] }: { data: NodeDat
           key={`l-${node.id}`} 
           x1={node.x} y1={node.y} x2={node.left.x} y2={node.left.y} 
           stroke="#475569" strokeWidth="2" strokeLinecap="round"
+          className="animate-in fade-in duration-700"
         />
       );
       links.push(...renderLinks(node.left));
@@ -134,6 +159,7 @@ const TreeVisualizer = ({ data, activeNodeId, visitedIds = [] }: { data: NodeDat
           key={`r-${node.id}`} 
           x1={node.x} y1={node.y} x2={node.right.x} y2={node.right.y} 
           stroke="#475569" strokeWidth="2" strokeLinecap="round"
+          className="animate-in fade-in duration-700"
         />
       );
       links.push(...renderLinks(node.right));
@@ -145,19 +171,20 @@ const TreeVisualizer = ({ data, activeNodeId, visitedIds = [] }: { data: NodeDat
     const nodes: React.ReactNode[] = [];
     const isActive = node.id === activeNodeId;
     const isVisited = visitedIds.includes(node.id);
+    const isNew = node.isNew;
 
     nodes.push(
-      <g key={`node-g-${node.id}`} className="tree-node">
-        {isActive && (
+      <g key={`node-g-${node.id}`} className={`tree-node ${isNew ? 'animate-bounce' : ''}`}>
+        {(isActive || isNew) && (
           <circle 
             cx={node.x} cy={node.y} r="28" 
-            className="fill-emerald-500/30 traversal-highlight"
+            className={`fill-emerald-500/30 ${isActive ? 'traversal-highlight' : 'animate-ping'}`}
           />
         )}
         <circle 
           cx={node.x} cy={node.y} r="20" 
-          fill={isActive ? "#10b981" : (isVisited ? "#065f46" : "#1e293b")}
-          stroke={isActive ? "#34d399" : "#475569"}
+          fill={isActive || isNew ? "#10b981" : (isVisited ? "#065f46" : "#1e293b")}
+          stroke={isActive || isNew ? "#34d399" : "#475569"}
           strokeWidth="2"
         />
         <text 
@@ -175,7 +202,7 @@ const TreeVisualizer = ({ data, activeNodeId, visitedIds = [] }: { data: NodeDat
   };
 
   return (
-    <div className="w-full h-full min-h-[300px] flex items-center justify-center bg-slate-900/40 rounded-xl border border-slate-700/50 overflow-hidden">
+    <div className="w-full h-full min-h-[300px] flex items-center justify-center bg-slate-900/40 rounded-xl border border-slate-700/50 overflow-hidden relative">
       <svg 
         viewBox={`0 0 ${canvasWidth} ${canvasHeight}`} 
         className="w-full h-auto max-h-[400px] max-w-[600px] drop-shadow-2xl"
@@ -205,9 +232,17 @@ const App = () => {
   const [traversalType, setTraversalType] = useState('preorder');
   const [traversalStep, setTraversalStep] = useState(-1);
   const [visited, setVisited] = useState<string[]>([]);
+  
+  // Custom tree builder states
+  const [userInput, setUserInput] = useState('50, 30, 70, 20, 40, 60, 80');
+  const [customTree, setCustomTree] = useState<NodeData | null>(null);
+  const [isConstructing, setIsConstructing] = useState(false);
+  const [constructionQueue, setConstructionQueue] = useState<number[]>([]);
+  const idCounterRef = useRef({ current: 1 });
 
   // Simulation logic for traversal
-  const getTraversalOrder = (node: NodeData, type: string): string[] => {
+  const getTraversalOrder = (node: NodeData | null, type: string): string[] => {
+    if (!node) return [];
     const order: string[] = [];
     const walk = (n?: NodeData) => {
       if (!n) return;
@@ -222,13 +257,58 @@ const App = () => {
   };
 
   const startTraversal = () => {
+    if (isConstructing) return;
     setTraversalStep(0);
     setVisited([]);
   };
 
+  const handleStartConstruction = () => {
+    const values = userInput.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v));
+    if (values.length === 0) return;
+    
+    setCustomTree(null);
+    setTraversalStep(-1);
+    setVisited([]);
+    idCounterRef.current = { current: 1 };
+    setConstructionQueue(values);
+    setIsConstructing(true);
+  };
+
+  const handleReset = () => {
+    setCustomTree(null);
+    setConstructionQueue([]);
+    setIsConstructing(false);
+    setTraversalStep(-1);
+    setVisited([]);
+  };
+
+  // Step-by-step construction effect with settled "still" state after completion
+  useEffect(() => {
+    if (isConstructing && constructionQueue.length > 0) {
+      const timer = setTimeout(() => {
+        const nextVal = constructionQueue[0];
+        setCustomTree(prev => {
+          // Clear isNew from previous nodes before adding the next one
+          const cleared = prev ? clearNewFlags(prev) : undefined;
+          return insertBSTImmutable(cleared, nextVal, idCounterRef.current);
+        });
+        setConstructionQueue(prev => prev.slice(1));
+      }, 1000); 
+      return () => clearTimeout(timer);
+    } else if (isConstructing && constructionQueue.length === 0) {
+      // Settle the tree into a still position after a short delay
+      const timer = setTimeout(() => {
+        setCustomTree(prev => prev ? clearNewFlags(prev) : null);
+        setIsConstructing(false);
+      }, 1500); 
+      return () => clearTimeout(timer);
+    }
+  }, [isConstructing, constructionQueue]);
+
   useEffect(() => {
     if (traversalStep >= 0) {
-      const order = getTraversalOrder(TREE_PRESETS.binary, traversalType);
+      const sourceTree = activeTab === 'traversals' ? TREE_PRESETS.binary : customTree;
+      const order = getTraversalOrder(sourceTree, traversalType);
       if (traversalStep < order.length) {
         const timer = setTimeout(() => {
           setVisited(prev => [...prev, order[traversalStep]]);
@@ -239,9 +319,12 @@ const App = () => {
         setTraversalStep(-1);
       }
     }
-  }, [traversalStep, traversalType]);
+  }, [traversalStep, traversalType, activeTab, customTree]);
 
-  const currentOrder = useMemo(() => getTraversalOrder(TREE_PRESETS.binary, traversalType), [traversalType]);
+  const currentOrder = useMemo(() => {
+    const sourceTree = activeTab === 'traversals' ? TREE_PRESETS.binary : customTree;
+    return getTraversalOrder(sourceTree, traversalType);
+  }, [traversalType, activeTab, customTree]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#0f172a] text-slate-200">
@@ -256,27 +339,27 @@ const App = () => {
           <SidebarItem 
             active={activeTab === 'intro'} 
             icon={BookOpen} label="Introduction" 
-            onClick={() => setActiveTab('intro')} 
+            onClick={() => { setActiveTab('intro'); setTraversalStep(-1); }} 
           />
           <SidebarItem 
             active={activeTab === 'types'} 
             icon={GitBranch} label="Tree Types" 
-            onClick={() => setActiveTab('types')} 
+            onClick={() => { setActiveTab('types'); setTraversalStep(-1); }} 
           />
           <SidebarItem 
             active={activeTab === 'traversals'} 
             icon={Zap} label="Traversals" 
-            onClick={() => setActiveTab('traversals')} 
+            onClick={() => { setActiveTab('traversals'); setTraversalStep(-1); }} 
           />
           <SidebarItem 
             active={activeTab === 'advanced'} 
             icon={Layers} label="Advanced Trees" 
-            onClick={() => setActiveTab('advanced')} 
+            onClick={() => { setActiveTab('advanced'); setTraversalStep(-1); }} 
           />
           <SidebarItem 
             active={activeTab === 'applications'} 
             icon={Cpu} label="Applications" 
-            onClick={() => setActiveTab('applications')} 
+            onClick={() => { setActiveTab('applications'); setTraversalStep(-1); }} 
           />
         </nav>
 
@@ -327,33 +410,92 @@ const App = () => {
               </div>
               
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12 items-stretch">
-                <div className="glass-panel p-8 rounded-2xl flex flex-col">
-                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2 text-white">
-                    <Info size={18} className="text-emerald-400" />
-                    Key Terminology
-                  </h3>
-                  <div className="space-y-6 flex-1">
-                    {[
-                      { term: 'Root', desc: 'Topmost node with no parent.' },
-                      { term: 'Parent / Child', desc: 'Hierarchical relationship where one node is the predecessor of others.' },
-                      { term: 'Leaf Node', desc: 'Node with no children (terminal nodes).' },
-                      { term: 'Subtree', desc: 'A tree formed from any node and its descendants.' }
-                    ].map((item, i) => (
-                      <div key={i} className="flex gap-4 group">
-                        <div className="w-1 h-full min-h-[40px] rounded-full bg-slate-700 group-hover:bg-emerald-500 transition-colors shrink-0" />
-                        <div>
-                          <p className="font-bold text-slate-100">{item.term}</p>
-                          <p className="text-sm text-slate-400 leading-relaxed">{item.desc}</p>
-                        </div>
+                <div className="flex flex-col gap-6">
+                  {/* Interactive Tree Builder */}
+                  <div className="glass-panel p-6 rounded-2xl border-emerald-500/10">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-white">
+                      <PlusCircle size={18} className="text-emerald-400" />
+                      Build Your Own Tree
+                    </h3>
+                    <p className="text-xs text-slate-500 mb-4">Enter numbers separated by commas to watch the BST grow node-by-node.</p>
+                    <div className="flex flex-col gap-3">
+                      <input 
+                        type="text" 
+                        disabled={isConstructing}
+                        value={userInput}
+                        onChange={(e) => setUserInput(e.target.value)}
+                        placeholder="e.g. 50, 30, 70, 20, 40"
+                        className="bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-emerald-100 font-mono disabled:opacity-50"
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <button 
+                          disabled={isConstructing || !userInput}
+                          onClick={handleStartConstruction}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 group shadow-lg shadow-emerald-900/20 disabled:bg-slate-700 disabled:shadow-none"
+                        >
+                          <RefreshCw size={16} className={`${isConstructing ? 'animate-spin' : 'group-active:rotate-180 transition-transform duration-500'}`} />
+                          {isConstructing ? 'Building...' : 'Start Growth'}
+                        </button>
+                        <button 
+                          onClick={handleReset}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
+                        >
+                          <Trash2 size={16} />
+                          Clear Tree
+                        </button>
                       </div>
-                    ))}
+                    </div>
+                  </div>
+
+                  <div className="glass-panel p-6 rounded-2xl flex flex-col">
+                    <h3 className="text-lg font-semibold mb-6 flex items-center gap-2 text-white">
+                      <Info size={18} className="text-emerald-400" />
+                      Key Terminology
+                    </h3>
+                    <div className="space-y-4 flex-1">
+                      {[
+                        { term: 'Root', desc: 'Topmost node with no parent.' },
+                        { term: 'Parent / Child', desc: 'Predecessor and successor relationship.' },
+                        { term: 'Leaf Node', desc: 'Node with no children.' },
+                        { term: 'Subtree', desc: 'Tree formed from a node and its descendants.' }
+                      ].map((item, i) => (
+                        <div key={i} className="flex gap-4 group">
+                          <div className="w-1 h-auto min-h-[30px] rounded-full bg-slate-700 group-hover:bg-emerald-500 transition-colors shrink-0" />
+                          <div>
+                            <p className="font-bold text-slate-100 text-sm">{item.term}</p>
+                            <p className="text-[12px] text-slate-400 leading-relaxed">{item.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-4 min-h-[400px]">
-                  <div className="glass-panel p-6 rounded-2xl flex-1 flex flex-col items-center justify-center overflow-hidden">
-                    <TreeVisualizer data={TREE_PRESETS.binary} />
-                    <p className="text-xs text-slate-500 mt-4 italic font-medium">Standard Hierarchical Visualization</p>
+                  <div className="glass-panel p-6 rounded-2xl flex-1 flex flex-col items-center justify-center overflow-hidden relative">
+                    {isConstructing && constructionQueue.length > 0 && (
+                      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-black shadow-lg animate-pulse">
+                        <PlusCircle size={12} />
+                        INSERTING: {constructionQueue[0]}
+                      </div>
+                    )}
+                    <TreeVisualizer 
+                      data={customTree} 
+                      activeNodeId={traversalStep >= 0 ? getTraversalOrder(customTree, traversalType)[traversalStep] : undefined}
+                      visitedIds={visited}
+                    />
+                    <div className="w-full mt-4 flex justify-between items-center">
+                      <p className="text-xs text-slate-500 italic font-medium">Step-by-Step BST Builder</p>
+                      {customTree && !isConstructing && (
+                        <button 
+                          onClick={startTraversal}
+                          className="text-[10px] font-black bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"
+                        >
+                          <Play size={10} fill="currentColor" />
+                          RUN TRAVERSAL
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -460,7 +602,7 @@ const App = () => {
                   <div className="relative glass-panel rounded-2xl p-4 md:p-8 min-h-[450px] flex items-center justify-center">
                     <TreeVisualizer 
                       data={TREE_PRESETS.binary} 
-                      activeNodeId={traversalStep >= 0 ? currentOrder[traversalStep] : undefined}
+                      activeNodeId={traversalStep >= 0 ? getTraversalOrder(TREE_PRESETS.binary, traversalType)[traversalStep] : undefined}
                       visitedIds={visited}
                     />
                     <div className="absolute top-4 right-4 bg-slate-950/80 backdrop-blur border border-slate-700 p-2 rounded-lg text-[10px] font-mono text-emerald-400">
@@ -484,7 +626,13 @@ const App = () => {
                       </p>
                       <div className="flex flex-wrap gap-3">
                         {currentOrder.map((id, i) => {
-                          const nodeValue = id === '1' ? 10 : id === '2' ? 5 : id === '3' ? 15 : id === '4' ? 2 : id === '5' ? 7 : id === '6' ? 12 : 20;
+                          const findVal = (node: NodeData | null, targetId: string): number | null => {
+                            if (!node) return null;
+                            if (node.id === targetId) return node.value;
+                            return findVal(node.left || null, targetId) || findVal(node.right || null, targetId);
+                          };
+                          const sourceTree = activeTab === 'traversals' ? TREE_PRESETS.binary : customTree;
+                          const nodeValue = findVal(sourceTree, id);
                           const isDone = visited.includes(id);
                           const isCurrent = traversalStep >= 0 && currentOrder[traversalStep] === id;
                           return (
