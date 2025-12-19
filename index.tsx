@@ -15,7 +15,8 @@ import {
   Info,
   Box,
   Layout,
-  User
+  User,
+  ShieldCheck
 } from 'lucide-react';
 
 // --- Types & Data ---
@@ -291,8 +292,8 @@ const App = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10">
-        <div className="max-w-6xl mx-auto">
+      <main className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 flex flex-col">
+        <div className="max-w-6xl mx-auto flex-1 w-full">
           
           {/* Introduction Section */}
           {activeTab === 'intro' && (
@@ -593,6 +594,22 @@ const App = () => {
               </div>
             </div>
           )}
+
+          {/* Website Footer */}
+          <footer className="mt-16 py-8 border-t border-slate-800/40 text-center flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2 text-emerald-500/60 mb-2">
+              <ShieldCheck size={16} />
+              <span className="text-[10px] uppercase tracking-[0.3em] font-black">Official Publication</span>
+            </div>
+            <p className="text-slate-500 text-xs font-bold tracking-widest uppercase">
+              All Rights Reserved By Vaghoba Mitra Mandal
+            </p>
+            <div className="mt-4 flex gap-4 opacity-30">
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+            </div>
+          </footer>
 
         </div>
       </main>
