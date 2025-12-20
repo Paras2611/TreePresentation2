@@ -20,19 +20,23 @@ import {
   PlusCircle,
   RefreshCw,
   Trash2,
-  Play
+  Play,
+  Eye,
+  CheckCircle2
 } from 'lucide-react';
 
 // --- Types & Data ---
 
 type NodeData = {
   id: string;
-  value: number;
+  value: number | string;
   left?: NodeData;
   right?: NodeData;
+  middle?: NodeData; // For Ternary trees
+  children?: NodeData[]; // For General trees
   x?: number;
   y?: number;
-  isNew?: boolean; // For animation highlight
+  isNew?: boolean; 
 };
 
 const TREE_PRESETS: Record<string, NodeData> = {
@@ -40,6 +44,44 @@ const TREE_PRESETS: Record<string, NodeData> = {
     id: '1', value: 10,
     left: { id: '2', value: 5, left: { id: '4', value: 2 }, right: { id: '5', value: 7 } },
     right: { id: '3', value: 15, left: { id: '6', value: 12 }, right: { id: '7', value: 20 } }
+  },
+  general: {
+    id: 'g1', value: 'R',
+    children: [
+      { id: 'g2', value: 'A', children: [{ id: 'g5', value: 'D' }, { id: 'g6', value: 'E' }, { id: 'g7', value: 'F' }] },
+      { id: 'g3', value: 'B' },
+      { id: 'g4', value: 'C', children: [{ id: 'g8', value: 'G' }] }
+    ]
+  },
+  ternary: {
+    id: 't1', value: 1,
+    left: { id: 't2', value: 2 },
+    middle: { id: 't3', value: 3 },
+    right: { id: 't4', value: 4 }
+  },
+  full: {
+    id: 'f1', value: 1,
+    left: { id: 'f2', value: 2, left: { id: 'f4', value: 4 }, right: { id: 'f5', value: 5 } },
+    right: { id: 'f3', value: 3 }
+  },
+  complete: {
+    id: 'c1', value: 1,
+    left: { id: 'c2', value: 2, left: { id: 'c4', value: 4 }, right: { id: 'c5', value: 5 } },
+    right: { id: 'c3', value: 3, left: { id: 'c6', value: 6 } }
+  },
+  perfect: {
+    id: 'p1', value: 1,
+    left: { id: 'p2', value: 2, left: { id: 'p4', value: 4 }, right: { id: 'p5', value: 5 } },
+    right: { id: 'p3', value: 3, left: { id: 'p6', value: 6 }, right: { id: 'p7', value: 7 } }
+  },
+  skewed: {
+    id: 's1', value: 1,
+    right: { id: 's2', value: 2, right: { id: 's3', value: 3, right: { id: 's4', value: 4 } } }
+  },
+  balanced: {
+    id: 'b1', value: 1,
+    left: { id: 'b2', value: 2, left: { id: 'b4', value: 4 } },
+    right: { id: 'b3', value: 3 }
   }
 };
 
@@ -92,9 +134,9 @@ const insertBSTImmutable = (root: NodeData | undefined, val: number, idCounter: 
     return { id: (idCounter.current++).toString(), value: val, isNew: true };
   }
   const newNode = { ...root, isNew: false };
-  if (val < root.value) {
+  if (val < (root.value as number)) {
     newNode.left = insertBSTImmutable(root.left, val, idCounter);
-  } else if (val > root.value) {
+  } else if (val > (root.value as number)) {
     newNode.right = insertBSTImmutable(root.right, val, idCounter);
   }
   return newNode;
@@ -115,6 +157,65 @@ const SidebarItem = ({ active, icon: Icon, label, onClick }: any) => (
     <span className="font-medium text-sm">{label}</span>
   </button>
 );
+
+const MiniTreeVisualizer = ({ data, size = 120 }: { data: NodeData, size?: number }) => {
+  const canvasWidth = 200;
+  const canvasHeight = 150;
+
+  const calculatePositions = (node: NodeData, depth: number, xStart: number, xEnd: number): NodeData => {
+    const x = (xStart + xEnd) / 2;
+    const y = depth * 40 + 30;
+    
+    if (node.children) {
+      const step = (xEnd - xStart) / node.children.length;
+      return {
+        ...node, x, y,
+        children: node.children.map((child, i) => calculatePositions(child, depth + 1, xStart + i * step, xStart + (i + 1) * step))
+      };
+    }
+    
+    return {
+      ...node, x, y,
+      left: node.left ? calculatePositions(node.left, depth + 1, xStart, x) : undefined,
+      middle: node.middle ? calculatePositions(node.middle, depth + 1, (xStart + xEnd)/2 - 15, (xStart + xEnd)/2 + 15) : undefined,
+      right: node.right ? calculatePositions(node.right, depth + 1, x, xEnd) : undefined
+    };
+  };
+
+  const tree = useMemo(() => calculatePositions(data, 0, 0, canvasWidth), [data]);
+
+  const renderElements = (node: NodeData): React.ReactNode[] => {
+    const elements: React.ReactNode[] = [];
+    const children = node.children || [node.left, node.middle, node.right].filter(Boolean) as NodeData[];
+
+    children.forEach((child, i) => {
+      elements.push(
+        <line 
+          key={`l-${node.id}-${i}`} 
+          x1={node.x} y1={node.y} x2={child.x} y2={child.y} 
+          stroke="#475569" strokeWidth="1.5"
+        />
+      );
+      elements.push(...renderElements(child));
+    });
+
+    elements.push(
+      <g key={`n-${node.id}`}>
+        <circle cx={node.x} cy={node.y} r="8" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+      </g>
+    );
+
+    return elements;
+  };
+
+  return (
+    <div className="bg-slate-900/40 rounded-lg border border-slate-700/50 overflow-hidden flex items-center justify-center p-2">
+      <svg width={size} height={size * 0.75} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
+        {renderElements(tree)}
+      </svg>
+    </div>
+  );
+};
 
 const TreeVisualizer = ({ data, activeNodeId, visitedIds = [] }: { data: NodeData | null, activeNodeId?: string, visitedIds?: string[] }) => {
   if (!data) return (
@@ -288,7 +389,6 @@ const App = () => {
       const timer = setTimeout(() => {
         const nextVal = constructionQueue[0];
         setCustomTree(prev => {
-          // Clear isNew from previous nodes before adding the next one
           const cleared = prev ? clearNewFlags(prev) : undefined;
           return insertBSTImmutable(cleared, nextVal, idCounterRef.current);
         });
@@ -296,7 +396,6 @@ const App = () => {
       }, 1000); 
       return () => clearTimeout(timer);
     } else if (isConstructing && constructionQueue.length === 0) {
-      // Settle the tree into a still position after a short delay
       const timer = setTimeout(() => {
         setCustomTree(prev => prev ? clearNewFlags(prev) : null);
         setIsConstructing(false);
@@ -521,36 +620,82 @@ const App = () => {
                 description="Categorizing trees based on their branching factors and structural properties."
               />
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                 {[
-                  { title: 'General Tree', desc: 'Any node can have any number of children.', icon: Network },
-                  { title: 'Binary Tree', desc: 'At most two children (left & right).', icon: Binary },
-                  { title: 'Ternary Tree', desc: 'At most three children per node.', icon: GitBranch }
+                  { 
+                    title: 'General Tree', 
+                    desc: 'A hierarchy with no limit on children per node.', 
+                    icon: Network, 
+                    key: 'general',
+                    examples: ['File Systems', 'Org Charts', 'JSON/XML']
+                  },
+                  { 
+                    title: 'Binary Tree', 
+                    desc: 'The fundamental structure with max 2 children.', 
+                    icon: Binary, 
+                    key: 'binary',
+                    examples: ['Expression Trees', 'Decision Trees', 'Huffman']
+                  },
+                  { 
+                    title: 'Ternary Tree', 
+                    desc: 'Nodes branching into three distinct paths.', 
+                    icon: GitBranch, 
+                    key: 'ternary',
+                    examples: ['Ternary Search', 'Octrees (partial)', 'Game logic']
+                  }
                 ].map((t, i) => (
-                  <div key={i} className="glass-panel p-6 rounded-xl hover:bg-slate-800/60 transition-all border-slate-700/50 hover:border-emerald-500/30">
-                    <t.icon className="text-emerald-400 mb-4" size={24} />
-                    <h4 className="font-bold mb-2 text-white">{t.title}</h4>
-                    <p className="text-sm text-slate-400">{t.desc}</p>
+                  <div key={i} className="glass-panel p-6 rounded-2xl flex flex-col hover:bg-slate-800/60 transition-all border-slate-700/50 group">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400 group-hover:scale-110 transition-transform">
+                        <t.icon size={20} />
+                      </div>
+                      <h4 className="font-bold text-white">{t.title}</h4>
+                    </div>
+                    <div className="mb-4">
+                      <MiniTreeVisualizer data={TREE_PRESETS[t.key]} size={160} />
+                    </div>
+                    <p className="text-sm text-slate-400 leading-relaxed mb-4">{t.desc}</p>
+                    <div className="mt-auto space-y-2">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Applications</p>
+                      {t.examples.map((ex, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-[12px] text-emerald-400/80">
+                          <CheckCircle2 size={12} />
+                          <span>{ex}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
 
-              <div className="mb-10">
-                <h3 className="text-xl font-bold mb-6 text-slate-100 border-b border-slate-800 pb-2">Binary Tree Variants</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="mb-12">
+                <h3 className="text-xl font-bold mb-8 text-slate-100 flex items-center gap-3">
+                  <Eye className="text-emerald-400" size={24} />
+                  Binary Tree Variants Visual Gallery
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[
-                    { name: 'Full Binary Tree', desc: 'Each node has exactly 0 or 2 children.' },
-                    { name: 'Complete Binary Tree', desc: 'Levels filled except possibly last (left-aligned).' },
-                    { name: 'Perfect Binary Tree', desc: 'All levels completely filled.' },
-                    { name: 'Skewed Tree', desc: 'Nodes only on one side (Left/Right Skewed).' },
-                    { name: 'Balanced Binary Tree', desc: 'Height difference ≤ 1 between subtrees.' },
-                    { name: 'Binary Search Tree (BST)', desc: 'Maintains Left < Root < Right sorted property.' }
+                    { name: 'Full Binary Tree', desc: 'Each node has exactly 0 or 2 children.', key: 'full', example: 'Efficient storage algorithms' },
+                    { name: 'Complete Binary Tree', desc: 'All levels filled, left-aligned at last.', key: 'complete', example: 'Binary Heaps' },
+                    { name: 'Perfect Binary Tree', desc: 'Internal nodes have 2 children, leaves at same level.', key: 'perfect', example: 'Mathematical proofs' },
+                    { name: 'Skewed Tree', desc: 'Nodes have only one child; basically a list.', key: 'skewed', example: 'Worst-case BST' },
+                    { name: 'Balanced Tree', desc: 'Height difference ≤ 1 between subtrees.', key: 'balanced', example: 'AVL & Red-Black Trees' },
+                    { name: 'Binary Search Tree', desc: 'Left child < Parent < Right child property.', key: 'binary', example: 'Fast database indexing' }
                   ].map((v, i) => (
-                    <div key={i} className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/30 flex items-start gap-3 hover:bg-slate-800/50 transition-colors">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                      <div>
-                        <span className="font-bold block text-slate-200 text-sm mb-1">{v.name}</span>
-                        <span className="text-[12px] text-slate-500 leading-tight">{v.desc}</span>
+                    <div key={i} className="p-5 rounded-2xl bg-slate-800/30 border border-slate-700/30 hover:border-emerald-500/30 transition-all group flex flex-col">
+                      <div className="flex justify-between items-start mb-4">
+                        <span className="font-black text-slate-200 text-xs uppercase tracking-widest">{v.name}</span>
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                      </div>
+                      <div className="flex-1 mb-4">
+                        <MiniTreeVisualizer data={TREE_PRESETS[v.key]} size={140} />
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed group-hover:text-slate-400 transition-colors mb-2">
+                        {v.desc}
+                      </p>
+                      <div className="pt-2 border-t border-slate-700/40 flex items-center gap-2">
+                        <span className="text-[10px] text-emerald-500/60 font-bold uppercase">Usage:</span>
+                        <span className="text-[10px] text-slate-400 italic">{v.example}</span>
                       </div>
                     </div>
                   ))}
@@ -626,12 +771,12 @@ const App = () => {
                       </p>
                       <div className="flex flex-wrap gap-3">
                         {currentOrder.map((id, i) => {
-                          const findVal = (node: NodeData | null, targetId: string): number | null => {
+                          const findVal = (node: NodeData | null, targetId: string): number | string | null => {
                             if (!node) return null;
                             if (node.id === targetId) return node.value;
                             return findVal(node.left || null, targetId) || findVal(node.right || null, targetId);
                           };
-                          const sourceTree = activeTab === 'traversals' ? TREE_PRESETS.binary : customTree;
+                          const sourceTree = TREE_PRESETS.binary;
                           const nodeValue = findVal(sourceTree, id);
                           const isDone = visited.includes(id);
                           const isCurrent = traversalStep >= 0 && currentOrder[traversalStep] === id;
